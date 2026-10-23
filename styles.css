@@ -522,6 +522,25 @@ input:focus {
     margin-bottom: var(--spacing-md);
 }
 
+.speaker-filter {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+}
+
+.speaker-filter select {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--surface-light);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+}
+
+.speaker-filter small { color: var(--text-muted); }
+
 .panel-input input {
     flex: 1;
 }

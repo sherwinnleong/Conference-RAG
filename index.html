@@ -124,7 +124,14 @@
                         <span class="status-badge not-ready" id="rag-status">🔴 Not Ready</span>
                     </div>
                     <p class="panel-description">Get AI-generated answers based on conference talks. Requires all Edge
-                        Functions deployed.</p>
+                        Functions deployed. Optionally use talks from one speaker.</p>
+                    <div class="speaker-filter">
+                        <label for="rag-speaker">Use talks from</label>
+                        <select id="rag-speaker" disabled>
+                            <option value="">All speakers</option>
+                        </select>
+                        <small id="speaker-filter-message" role="status">Speakers load after sign-in.</small>
+                    </div>
                     <div class="panel-input">
                         <input type="text" id="rag-input" placeholder="Ask a question about conference talks..."
                             autocomplete="off" disabled />

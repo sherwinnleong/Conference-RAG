@@ -286,6 +286,52 @@ function showApp(user) {
     if (userEmailSpan) userEmailSpan.textContent = user.email;
     // Check search readiness when user logs in
     checkSearchReadiness();
+    loadSpeakerOptions();
+}
+
+let speakerOptionsLoading = false;
+
+async function loadSpeakerOptions() {
+    const select = document.getElementById('rag-speaker');
+    const message = document.getElementById('speaker-filter-message');
+    if (!supabaseClient || !select || speakerOptionsLoading) return;
+    speakerOptionsLoading = true;
+    select.disabled = true;
+    message.textContent = 'Loading speakers…';
+    try {
+        const speakers = new Set();
+        // Page through rows so speakers beyond the API's first page are included.
+        const pageSize = 1000;
+        for (let offset = 0; ; offset += pageSize) {
+            const { data, error } = await supabaseClient
+                .from('sentence_embeddings').select('speaker')
+                .not('embedding', 'is', null)
+                .order('speaker').order('id')
+                .range(offset, offset + pageSize - 1);
+            if (error) throw error;
+            for (const row of data || []) {
+                if (typeof row.speaker === 'string' && row.speaker.trim()) speakers.add(row.speaker);
+            }
+            if (!data || data.length < pageSize) break;
+        }
+        const previous = select.value;
+        select.replaceChildren(new Option('All speakers', ''));
+        for (const speaker of [...speakers].sort((a, b) => a.localeCompare(b))) {
+            // Clean the label only; exact stored values (including spaces) are used in SQL.
+            const label = speaker.replace(/^(?:Presented by|By)\s+/i, '').replace(/\s+/g, ' ');
+            select.add(new Option(label, speaker));
+        }
+        select.value = speakers.has(previous) ? previous : '';
+        select.disabled = false;
+        message.textContent = speakers.size
+            ? 'Answers use only the selected speaker’s available talks.'
+            : 'No speakers with embeddings are available yet.';
+    } catch {
+        select.replaceChildren(new Option('All speakers', ''));
+        message.textContent = 'Could not load speakers. Sign in again or refresh to retry.';
+    } finally {
+        speakerOptionsLoading = false;
+    }
 }
 
 function showMessage(text, type) {
@@ -522,6 +568,7 @@ async function semanticSearch() {
 async function askQuestion() {
     const question = ragInput ? ragInput.value.trim() : '';
     if (!question || !supabaseClient) return;
+    const selectedSpeaker = document.getElementById('rag-speaker')?.value || null;
 
     showLoading(true);
     clearResults('rag');
@@ -531,7 +578,11 @@ async function askQuestion() {
         const embedding = await getEmbedding(question);
 
         // Step 2: Search for similar sentences
-        const results = await searchSentences(embedding);
+        const results = await searchSentences(embedding, selectedSpeaker, true);
+        if (!results.length) {
+            showResults('rag', '<div class="no-results">No embedded passages are available for this selection. Try another speaker or All speakers.</div>');
+            return;
+        }
 
         // Step 3: Group by talk (with similarity scores and URLs)
         const topTalks = groupByTalk(results);
@@ -597,13 +648,16 @@ async function getEmbedding(text) {
 }
 
 // Search sentences using vector similarity
-async function searchSentences(embedding) {
+async function searchSentences(embedding, selectedSpeaker = null, speakerSearch = false) {
     if (!supabaseClient) throw new Error('Supabase not configured');
 
-    const { data, error } = await supabaseClient.rpc('match_sentences', {
+    const parameters = {
         query_embedding: embedding,
         match_count: 20
-    });
+    };
+    if (speakerSearch) parameters.selected_speaker = selectedSpeaker;
+    const { data, error } = await supabaseClient.rpc(
+        speakerSearch ? 'match_speaker_sentences' : 'match_sentences', parameters);
 
     if (error) throw new Error(`Database search failed: ${error.message}`);
     return data;
